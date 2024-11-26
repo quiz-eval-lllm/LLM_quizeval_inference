@@ -5,6 +5,7 @@ import os
 from aio_pika import connect_robust, Message, ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
 from dotenv import load_dotenv
+from utils.inference_utils import InferenceProcessManager
 
 # Load environment variables
 load_dotenv()
@@ -21,10 +22,8 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE")
 RABBITMQ_DIRECT_MESSAGE = os.getenv("RABBITMQ_DIRECT_EXCHANGE")
 
-
-async def process_request(data):
-
-    return data
+# Initialize the inference process manager
+inference_manager = InferenceProcessManager()
 
 
 async def task(message: AbstractIncomingMessage, channel):
@@ -35,21 +34,12 @@ async def task(message: AbstractIncomingMessage, channel):
         logging.info(f"Received message: {data}")
 
         # Process the request
-        package_id = data.get("packageId")
-        req_type = data.get("reqType")
-        if req_type != 2:
-            response_data = {
-                "status": "success",
-                "message": f"Successfully generating quiz package",
-                "package_id": package_id,
-            }
-        else:
-            quiz_id = data.get("quizId")
-            response_data = {
-                "status": "success",
-                "message": f"Successfully generating quiz package",
-                "quiz_id": quiz_id,
-            }
+        response_data = await inference_manager.start(data)
+
+        # Check for errors in the inference result
+        if response_data.get("status") == "error":
+            logging.error(f"Inference failed: {response_data['message']}")
+            raise RuntimeError("Inference process failed")
 
         logging.info(f"Processed successfully: {response_data}")
 
