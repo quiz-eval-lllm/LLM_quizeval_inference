@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from db_handler import fetch_evaluation, fetch_question, update_evaluation
+from db_handler import fetch_evaluation, fetch_question, update_evaluation, update_quiz_activities
 from inference_jobs.evaluate import calculate_essay_score
 
 
@@ -71,6 +71,21 @@ async def evaluate_request_handler(data):
 
         # Step 3: Perform evaluation
         score_list, final_score = await calculate_essay_score(user_answers, contexts)
+
+        # Step 4: Update evaluation
+        async def update_data():
+            tasks = [
+                update_evaluation(eval_id, score)
+                for eval_id, score in zip(eval_ids, score_list)
+            ]
+            await asyncio.gather(*tasks)
+
+        await update_data()
+
+        # Step 5: Update quiz activities
+        quiz_id = data.get("quizId")
+        if quiz_id:
+            await update_quiz_activities(quiz_id, final_score)
 
         # Step 6: Formatting the output
         eval_data = [{"eval_id": str(eval_id), "question_id": str(question_id), "score": score}

@@ -62,7 +62,7 @@ async def update_evaluation(evaluation_id, score):
     """
     Update score by evaluation id.
     """
-    query = f"UPDATE {POSTGRES_SCHEMA}.evaluation SET score = $1 WHERE eval_id = $2 RETURNING id"
+    query = f"UPDATE {POSTGRES_SCHEMA}.evaluation SET score = $1 WHERE eval_id = $2 RETURNING eval_id"
     try:
         result = await db_util.post_data(query, score, evaluation_id)
         return {"status": "success", "message": "Evaluation updated successfully"} if result else {"status": "error", "message": "Evaluation not found"}
@@ -71,11 +71,11 @@ async def update_evaluation(evaluation_id, score):
         return {"status": "error", "message": str(e)}
 
 
-async def update_quiz_activites(quiz_id, final_score):
+async def update_quiz_activities(quiz_id, final_score):
     """
     Update final score by quiz id.
     """
-    query = f"UPDATE {POSTGRES_SCHEMA}.quiz_activities SET final_score = $1 WHERE quiz_id = $2 RETURNING id"
+    query = f"UPDATE {POSTGRES_SCHEMA}.quiz_activities SET final_score = $1 WHERE quiz_id = $2 RETURNING quiz_id"
     try:
         result = await db_util.post_data(query, final_score, quiz_id)
         return {"status": "success", "message": "Quiz activity updated successfully"} if result else {"status": "error", "message": "Quiz activity not found"}
