@@ -36,10 +36,11 @@ async def fetch_evaluation(evaluation_id):
     query = f"SELECT * FROM {POSTGRES_SCHEMA}.evaluation WHERE eval_id = $1"
     try:
         data = await db_util.fetch_data(query, evaluation_id)
-        return data if data else []  # Return a list of dictionaries
+        return dict(data[0]) if data else None
+
     except Exception as e:
         logging.error(f"Error fetching evaluation: {e}")
-        return []
+        return None
 
 
 async def fetch_question(question_id):
@@ -50,11 +51,11 @@ async def fetch_question(question_id):
 
     try:
         data = await db_util.fetch_data(query, question_id)
-        return pd.DataFrame(data) if data else pd.DataFrame
+        return dict(data[0]) if data else None
 
     except Exception as e:
         logging.info(f"Error fetching evaluation: {e}")
-        return pd.DataFrame()
+        return None
 
 
 async def update_evaluation(evaluation_id, score):

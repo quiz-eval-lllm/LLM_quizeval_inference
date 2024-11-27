@@ -25,8 +25,6 @@ class InferenceProcessManager:
             # Call the inference functionality
             result = await self._call_generate(data)
 
-            logging.info("Finish 1 inference process...")
-
             # # Update the last used time for shutdown timer
             # self.last_used = time.time()
 

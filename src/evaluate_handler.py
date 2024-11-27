@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from db_handler import fetch_evaluation, fetch_question, update_evaluation
+from inference_jobs.evaluate import calculate_essay_score
 
 
 async def evaluate_request_handler(data):
@@ -20,28 +21,63 @@ async def evaluate_request_handler(data):
     if not evaluation_list:
         return {"status": "error", "message": "evaluation_id is missing in the request"}
 
-    # Process evaluations asynchronously
-    async def process_evaluations():
-        async def process_eval(eval_id):
+    user_answers = []
+    contexts = []
+    eval_ids = []
+    question_ids = []
+
+    # Gather user answers and contexts asynchronously
+    async def gather_data():
+        async def fetch_data(eval_id):
             try:
-                # Step 1: Fetch evaluation
+                # Fetch evaluation
                 eval_data = await fetch_evaluation(eval_id)
-                logging.info(f"Evaluation fetched for {eval_id}: {eval_data}")
-                return {"evaluation_id": eval_id, "status": "success", "data": eval_data}
+                user_answer = eval_data.get("user_answer")
+                question_id = eval_data.get("question_id")
+
+                if not user_answer or not question_id:
+                    raise ValueError(
+                        f"Missing user_answer or question_id for eval_id {eval_id}")
+
+                # Fetch question
+                question_data = await fetch_question(question_id)
+                context = question_data.get("context")
+
+                if not context:
+                    raise ValueError(
+                        f"Missing context for question_id {question_id}")
+
+                # Append data to lists
+                user_answers.append(user_answer)
+                contexts.append(context)
+                eval_ids.append(eval_id)
+                question_ids.append(question_id)
 
             except Exception as e:
-                logging.error(f"Error fetching evaluation for {eval_id}: {e}")
-                return {"evaluation_id": eval_id, "status": "error", "message": str(e)}
+                logging.error(
+                    f"Error fetching data for eval_id {eval_id}: {e}")
 
-        # Use asyncio.gather for concurrent execution
-        tasks = [process_eval(eval_id) for eval_id in evaluation_list]
-        return await asyncio.gather(*tasks)
+        # Concurrently fetch data
+        tasks = [fetch_data(eval_id) for eval_id in evaluation_list]
+        await asyncio.gather(*tasks)
 
     # Run the async process
     try:
-        # Directly await instead of using run_until_complete
-        result = await process_evaluations()
-        return {"status": "success", "results": "success"}
+        # Step 1 and 2: Gather all user answers and contexts
+        await gather_data()
+
+        if not user_answers or not contexts:
+            return {"status": "error", "message": "Failed to gather user answers or contexts"}
+
+        # Step 3: Perform evaluation
+        score_list, final_score = await calculate_essay_score(user_answers, contexts)
+
+        # Step 6: Formatting the output
+        eval_data = [{"eval_id": str(eval_id), "question_id": str(question_id), "score": score}
+                     for eval_id, question_id, score in zip(eval_ids, question_ids, score_list)]
+        avg_final_score = round((final_score / len(data.get("evalIdList"))), 2)
+
+        return {"quiz_id": data.get("quizId"), "eval_data": eval_data, "final_score": avg_final_score}
 
     except Exception as e:
         logging.error(f"Error during evaluation process: {e}")
