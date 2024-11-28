@@ -16,26 +16,57 @@ class InferenceProcessManager:
         self.last_used = None
         self.lock = threading.Lock()
         self.shutdown_timer = None
-        self.inactivity_timeout = 10 * 60  # 10 minutes in seconds
+        self.inactivity_timeout = 5 * 60
+        self.process_active = False
+
+    def _schedule_shutdown(self):
+        """Schedule process shutdown if inactive for a defined timeout."""
+        if self.shutdown_timer:
+            logging.info("Cancelling previous shutdown timer.")
+            self.shutdown_timer.cancel()
+
+        logging.info("Scheduling new shutdown timer.")
+        self.shutdown_timer = threading.Timer(
+            self.inactivity_timeout, self._shutdown_process)
+        self.shutdown_timer.start()
+
+    def _shutdown_process(self):
+        """Shutdown the inference process."""
+        with self.lock:
+            if self.process_active:
+                logging.info(
+                    "Shutting down inference process due to inactivity.")
+                os.environ["CUDA_VISIBLE_DEVICES"] = ""
+                self.process_active = False
+            else:
+                logging.info("Inference process is already inactive.")
 
     async def start(self, data):
-        """Start the inference process and directly call inference handler"""
+        """Start the inference process and directly call inference handler."""
         with self.lock:
-            logging.info("Starting inference process...")
+            if not self.process_active:
+                logging.info("Starting inference process...")
+                self.process_active = True  # Mark process as active
 
-            # Select GPUs with the least memory usage
-            available_gpus = pick_gpus_by_memory_usage(
-                count=2)  # Adjust count as needed
-            if available_gpus:
-                os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(available_gpus)
-                logging.info(f"Assigned GPUs: {available_gpus}")
-            else:
-                logging.warning("No available GPUs. Proceeding with CPU.")
+        # Select GPUs with the least memory usage
+        available_gpus = pick_gpus_by_memory_usage(count=2)
+        if available_gpus:
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(available_gpus)
+            logging.info(f"Assigned GPUs: {available_gpus}")
+        else:
+            logging.warning("No available GPUs. Proceeding with CPU.")
 
-            # Call the inference functionality
-            result = await self._call_generate(data)
+        # Call the inference functionality
+        result = await self._call_generate(data)
 
-            return result
+        # Once the process is formally done, schedule the shutdown timer
+        with self.lock:
+            if self.process_active:
+                logging.info(
+                    "Scheduling shutdown timer after completing the task.")
+                self._schedule_shutdown()
+
+        return result
 
     async def _call_generate(self, data):
         """Directly call inference function from handler.py."""
