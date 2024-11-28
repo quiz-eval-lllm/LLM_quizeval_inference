@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 import time
+import os
 from utils.gpu_utils import pick_gpus_by_memory_usage
 from generate_handler import generate_request_handler
 from evaluate_handler import evaluate_request_handler
@@ -22,47 +23,19 @@ class InferenceProcessManager:
         with self.lock:
             logging.info("Starting inference process...")
 
+            # Select GPUs with the least memory usage
+            available_gpus = pick_gpus_by_memory_usage(
+                count=2)  # Adjust count as needed
+            if available_gpus:
+                os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(available_gpus)
+                logging.info(f"Assigned GPUs: {available_gpus}")
+            else:
+                logging.warning("No available GPUs. Proceeding with CPU.")
+
             # Call the inference functionality
             result = await self._call_generate(data)
 
-            # # Update the last used time for shutdown timer
-            # self.last_used = time.time()
-
-            # # Reset the shutdown timer
-            # self.reset_shutdown_timer()
-
             return result
-
-    # def stop(self):
-    #     """Stop any activity and reset the manager state."""
-    #     with self.lock:
-    #         logging.info("Stopping inference process manager...")
-    #         self.last_used = None
-    #         if self.shutdown_timer:
-    #             self.shutdown_timer.cancel()
-
-    # def reset_shutdown_timer(self):
-    #     """Reset the shutdown timer to stop the manager after inactivity."""
-    #     with self.lock:
-    #         self.last_used = time.time()
-
-    #         # Cancel any existing shutdown timer
-    #         if self.shutdown_timer:
-    #             self.shutdown_timer.cancel()
-
-    #         # Set a new timer
-    #         self.shutdown_timer = threading.Timer(
-    #             self.inactivity_timeout, self._check_inactivity
-    #         )
-    #         self.shutdown_timer.start()
-
-    # def _check_inactivity(self):
-    #     """Check if the manager has been inactive and stop it if needed."""
-    #     with self.lock:
-    #         if time.time() - self.last_used >= self.inactivity_timeout:
-    #             logging.info(
-    #                 "No activity for 10 minutes. Stopping inference process.")
-    #             self.stop()
 
     async def _call_generate(self, data):
         """Directly call inference function from handler.py."""
