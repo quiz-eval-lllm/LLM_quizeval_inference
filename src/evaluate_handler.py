@@ -83,13 +83,18 @@ async def evaluate_request_handler(data):
         await update_data()
 
         # Step 5: Update quiz activities
+        # TODO: If quizId empty
         quiz_id = data.get("quizId")
         if quiz_id:
             await update_quiz_activities(quiz_id, final_score)
 
         # Step 6: Formatting the output
-        eval_data = [{"eval_id": str(eval_id), "question_id": str(question_id), "score": score}
-                     for eval_id, question_id, score in zip(eval_ids, question_ids, score_list)]
+        eval_data = [
+            {"eval_id": str(eval_id), "question_id": str(
+                question_id), "score": score}
+            for eval_id, question_id, score in zip(eval_ids, question_ids, score_list)
+        ]
+
         avg_final_score = round((final_score / len(data.get("evalIdList"))), 2)
 
         return {"quiz_id": data.get("quizId"), "eval_data": eval_data, "final_score": avg_final_score}

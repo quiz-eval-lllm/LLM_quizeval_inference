@@ -1,5 +1,7 @@
 import asyncio
+import tempfile
 import os
+import uuid
 import pandas as pd
 import logging
 from dotenv import load_dotenv
@@ -24,9 +26,101 @@ db_util = DatabaseUtility(
     password=POSTGRES_PASSWORD,
     schema=POSTGRES_SCHEMA)
 
-# TODO: fetch package
 
-# TODO: update question
+async def fetch_package(package_id):
+    """
+    Fetch package details by package_id, focusing on binary data (context) for PDF processing.
+    """
+    query = f"SELECT * FROM {POSTGRES_SCHEMA}.package WHERE package_id = $1"
+    try:
+        data = await db_util.fetch_data(query, package_id)
+        if not data:
+            return None
+
+        record = data[0]
+        package = dict(record)
+
+        if "context" in package and package["context"]:
+            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            temp_pdf.write(package["context"])
+            temp_pdf.close()
+            package["pdf_path"] = temp_pdf.name
+
+        return package
+
+    except Exception as e:
+        logging.error(f"Error fetching package: {e}")
+        return None
+
+
+async def insert_essay_questions(package_id, questions, answers):
+    """
+    Insert the series of essay questions
+    """
+    query = f"INSERT INTO {POSTGRES_SCHEMA}.quiz_essay(essay_id, package, question, context, is_deleted)
+    VALUES($1, $2, $3, $4, $5) RETURNING essay_id"
+
+    if len(questions) != len(answers):
+        return {"status": "error", "message": "Questions and answers must have the same length"}
+
+    try:
+        inserted_ids = []
+        for (question, answer) in enumerate(zip(questions, answers)):
+            essay_id = str(uuid.uuid4())
+            result = await db_util.post_data(
+                query,
+                essay_id,
+                package_id,
+                question,
+                answer,
+                False
+            )
+            if result:
+                inserted_ids.append(essay_id)
+        return inserted_ids
+    except Exception as e:
+        logging.error(f"Error inserting essay questions: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+async def insert_multichoice_questions(package_id, questions, answers, explanations=None):
+    """
+    Insert the series of multichoice questions
+    """
+    if len(questions) != len(answers):
+        return {"status": "error", "message": "Questions and answers must have the same length"}
+
+    if explanations and len(explanations) != len(questions):
+        return {"status": "error", "message": "Explanations must have the same length as questions if provided"}
+
+    query = f"""
+    INSERT INTO {POSTGRES_SCHEMA}.quiz_multichoice (multichoice_id, package, question, answer, explanation, is_deleted)
+    VALUES ($1, $2, $3, $4, $5, $6) RETURNING multichoice_id
+    """
+    try:
+        inserted_ids = []
+        for i, (question, answer) in enumerate(zip(questions, answers)):
+            explanation = explanations[i] if explanations else ""
+            multichoice_id = str(uuid.uuid4())  # Generate UUID locally
+            result = await db_util.post_data(
+                query,
+                multichoice_id,
+                package_id,
+                question,
+                answer,
+                explanation,
+                False
+            )
+            if result:
+                inserted_ids.append(multichoice_id)
+        return inserted_ids
+    except Exception as e:
+        logging.error(f"Error inserting multichoice questions: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+async def insert_multichoice_questions():
+    return None
 
 
 async def fetch_evaluation(evaluation_id):

@@ -10,10 +10,6 @@ __pycache__/
 .env
 
 # pip environment
-*.env
-*.venv
-env/
-venv/
 ENV/
 env.bak/
 venv.bak/
