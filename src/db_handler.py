@@ -70,12 +70,6 @@ async def insert_essay_questions(package_id, questions, answers):
     query = f"""INSERT INTO {POSTGRES_SCHEMA}.quiz_essay(essay_id, package, question, context, is_deleted)
     VALUES($1, $2, $3, $4, $5) RETURNING essay_id"""
 
-    logging.info("=========Question list==========")
-    logging.info(questions)
-
-    logging.info("=========Answer list==========")
-    logging.info(answers)
-
     if len(questions) != len(answers):
         return {"status": "error", "message": "Questions and answers must have the same length"}
 
@@ -83,8 +77,6 @@ async def insert_essay_questions(package_id, questions, answers):
         inserted_ids = []
         # Corrected the iteration to unpack zip correctly
         for question, answer in zip(questions, answers):
-            logging.info(f"====Question====: {question}")
-            logging.info(f"====Answer====: {answer}")
 
             essay_id = str(uuid.uuid4())
             result = await db_util.post_data(
