@@ -58,8 +58,29 @@ async def task(message: AbstractIncomingMessage, channel):
         # Explicitly acknowledge the message
         await message.ack()
         logging.info("Message acknowledged.")
+
     except Exception as e:
         logging.error(f"Error processing message: {e}")
+
+        # Prepare error response
+        error_response = {
+            "status": "error",
+            "message": str(e),
+            "details": "An error occurred while processing the message."
+        }
+
+        # Send error response to the reply-to queue if available
+        if message.reply_to:
+            await channel.default_exchange.publish(
+                Message(
+                    body=json.dumps(error_response).encode(),
+                    content_type="application/json",
+                    correlation_id=message.correlation_id,  # Ensure correlation_id is sent back
+                ),
+                routing_key=message.reply_to,  # Use the reply_to queue provided by the client
+            )
+            logging.info("Error response sent successfully.")
+
         # Negatively acknowledge the message; choose whether to requeue
         await message.nack(requeue=False)
         logging.error(

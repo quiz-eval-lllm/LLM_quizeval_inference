@@ -161,18 +161,7 @@ async def generate_quiz_question(package):
     pdf_path = package.get("pdf_path")
     question_type = package.get("type")
     language = package.get("lang")
-
-    if not pdf_path:
-        logging.error("Missing 'pdf_path' in package.")
-        return {"status": "error", "message": "Missing 'pdf_path' in package."}
-
-    if not question_type:
-        logging.error("Missing 'type' (question type) in package.")
-        return {"status": "error", "message": "Missing 'type' (question type) in package."}
-
-    if not language:
-        logging.error("Missing 'lang' (language) in package.")
-        return {"status": "error", "message": "Missing 'lang' (language) in package."}
+    prompt = package.get("prompt") or ""
 
     # Parse PDF as context
     parsed_text = parse_pdf_to_text(pdf_path)
@@ -187,13 +176,15 @@ async def generate_quiz_question(package):
         return
 
     # Context Retrival
-    llm = ChatGroq(temperature=0, groq_api_key=groq_api)
+    llm = ChatGroq(temperature=0, model_name="llama3-70b-8192",
+                   groq_api_key=groq_api)
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=compression_retriever)
 
     # Genrating multiple choice quiz
     if question_type == 0:
-        prompt = "Generate 5 Multiple Choice Question from Context"
+        prompt = "Generate 5 Multiple Choice Question from Context" + \
+            str(prompt)
 
         # Quiz for indonesia
         if (language == "id"):
@@ -204,11 +195,12 @@ async def generate_quiz_question(package):
             response_mcq = generate_questions(prompt, "mcq", "en", qa)
 
         questions, answers = parse_mcq(response_mcq)
+
         return questions, answers
 
     # Genrating essay quiz
     elif question_type == 1:
-        prompt = "Generate 5 Essay Question from Context"
+        prompt = "Generate 5 Essay Question from Context" + str(prompt)
 
         # Quiz for indonesia
         if (language == "id"):
@@ -219,6 +211,7 @@ async def generate_quiz_question(package):
             response_essay = generate_questions(prompt, "essay", "en", qa)
 
         questions, contexts = parse_essay(response_essay)
+
         return questions, contexts
 
     else:

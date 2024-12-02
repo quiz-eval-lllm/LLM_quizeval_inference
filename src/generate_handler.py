@@ -41,7 +41,7 @@ async def generate_request_handler(data):
 
         # Step 4: Delete context
         pdf_context_path = package.get("pdf_path")
-        if os.path.exists(package.get("pdf_context_path")):
+        if os.path.exists(pdf_context_path):
             os.remove(pdf_context_path)
 
         question_data = [

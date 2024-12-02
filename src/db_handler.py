@@ -1,5 +1,6 @@
 import asyncio
 import tempfile
+import requests
 import os
 import uuid
 import pandas as pd
@@ -40,11 +41,20 @@ async def fetch_package(package_id):
         record = data[0]
         package = dict(record)
 
+        # Download PDF from context URL
         if "context" in package and package["context"]:
-            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            temp_pdf.write(package["context"])
-            temp_pdf.close()
-            package["pdf_path"] = temp_pdf.name
+            response = requests.get(package["context"], stream=True)
+            if response.status_code == 200:
+                temp_pdf = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".pdf")
+                for chunk in response.iter_content(chunk_size=8192):
+                    temp_pdf.write(chunk)
+                temp_pdf.close()
+                package["pdf_path"] = temp_pdf.name
+            else:
+                logging.error(
+                    f"Failed to download PDF from {package['context']}. Status code: {response.status_code}")
+                package["pdf_path"] = None
 
         return package
 
@@ -57,15 +67,25 @@ async def insert_essay_questions(package_id, questions, answers):
     """
     Insert the series of essay questions
     """
-    query = f"INSERT INTO {POSTGRES_SCHEMA}.quiz_essay(essay_id, package, question, context, is_deleted)
-    VALUES($1, $2, $3, $4, $5) RETURNING essay_id"
+    query = f"""INSERT INTO {POSTGRES_SCHEMA}.quiz_essay(essay_id, package, question, context, is_deleted)
+    VALUES($1, $2, $3, $4, $5) RETURNING essay_id"""
+
+    logging.info("=========Question list==========")
+    logging.info(questions)
+
+    logging.info("=========Answer list==========")
+    logging.info(answers)
 
     if len(questions) != len(answers):
         return {"status": "error", "message": "Questions and answers must have the same length"}
 
     try:
         inserted_ids = []
-        for (question, answer) in enumerate(zip(questions, answers)):
+        # Corrected the iteration to unpack zip correctly
+        for question, answer in zip(questions, answers):
+            logging.info(f"====Question====: {question}")
+            logging.info(f"====Answer====: {answer}")
+
             essay_id = str(uuid.uuid4())
             result = await db_util.post_data(
                 query,
@@ -94,14 +114,14 @@ async def insert_multichoice_questions(package_id, questions, answers, explanati
         return {"status": "error", "message": "Explanations must have the same length as questions if provided"}
 
     query = f"""
-    INSERT INTO {POSTGRES_SCHEMA}.quiz_multichoice (multichoice_id, package, question, answer, explanation, is_deleted)
+    INSERT INTO {POSTGRES_SCHEMA}.quiz_multiple_choice (multichoice_id, package, question, answer, explanation, is_deleted)
     VALUES ($1, $2, $3, $4, $5, $6) RETURNING multichoice_id
     """
     try:
         inserted_ids = []
         for i, (question, answer) in enumerate(zip(questions, answers)):
             explanation = explanations[i] if explanations else ""
-            multichoice_id = str(uuid.uuid4())  # Generate UUID locally
+            multichoice_id = str(uuid.uuid4())
             result = await db_util.post_data(
                 query,
                 multichoice_id,
@@ -117,10 +137,6 @@ async def insert_multichoice_questions(package_id, questions, answers, explanati
     except Exception as e:
         logging.error(f"Error inserting multichoice questions: {e}")
         return {"status": "error", "message": str(e)}
-
-
-async def insert_multichoice_questions():
-    return None
 
 
 async def fetch_evaluation(evaluation_id):
