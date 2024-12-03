@@ -25,7 +25,7 @@ load_dotenv()
 
 # Configure Groq
 parser_key = os.getenv("PARSER_KEY")
-groq_api = os.getenv("GROQ_API")
+llm_api = os.getenv("LLM_KEY")
 
 # Parsing PDF to text
 
@@ -177,7 +177,7 @@ async def generate_quiz_question(package):
 
     # Context Retrival
     llm = ChatGroq(temperature=0, model_name="llama3-70b-8192",
-                   groq_api_key=groq_api)
+                   groq_api_key=llm_api)
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=compression_retriever)
 
