@@ -9,8 +9,6 @@ __pycache__/
 # Environment variables
 
 # pip environment
-ENV/
-env.bak/
 venv.bak/
 
 # Django stuff:
