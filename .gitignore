@@ -7,8 +7,11 @@ __pycache__/
 *.so
 
 # Environment variables
+.env
 
 # pip environment
+ENV/
+env.bak/
 venv.bak/
 
 # Django stuff:
