@@ -95,27 +95,50 @@ async def insert_essay_questions(package_id, questions, answers):
         return {"status": "error", "message": str(e)}
 
 
-async def insert_multichoice_questions(package_id, questions, answers, explanations=None):
+async def insert_multichoice_questions(package_id, questions, answers, options_list, explanations=None):
     """
-    Insert the series of multichoice questions
+    Insert a series of multichoice questions along with their options.
+    
+    Args:
+        package_id: The ID of the package the questions belong to.
+        questions: List of questions.
+        answers: List of correct answers.
+        options_list: List of lists where each sub-list contains options for a question.
+        explanations: Optional list of explanations for each question.
     """
     if len(questions) != len(answers):
         return {"status": "error", "message": "Questions and answers must have the same length"}
 
+    if len(questions) != len(options_list):
+        return {"status": "error", "message": "Questions and options must have the same length"}
+
     if explanations and len(explanations) != len(questions):
         return {"status": "error", "message": "Explanations must have the same length as questions if provided"}
 
-    query = f"""
+    # Query for inserting into the main table
+    question_query = f"""
     INSERT INTO {POSTGRES_SCHEMA}.quiz_multiple_choice (multichoice_id, package, question, answer, explanation, is_deleted)
     VALUES ($1, $2, $3, $4, $5, $6) RETURNING multichoice_id
     """
+
+    # Query for inserting options into the options table
+    options_query = f"""
+    INSERT INTO {POSTGRES_SCHEMA}.multichoice_options (multichoice_id, option)
+    VALUES ($1, $2)
+    """
+
     try:
         inserted_ids = []
-        for i, (question, answer) in enumerate(zip(questions, answers)):
+        for i, (question, answer, options) in enumerate(zip(questions, answers, options_list)):
+            if not options or len(options) < 2:
+                return {"status": "error", "message": f"Each question must have at least two options. Error in question {i + 1}"}
+
             explanation = explanations[i] if explanations else ""
             multichoice_id = str(uuid.uuid4())
+
+            # Insert into the main table
             result = await db_util.post_data(
-                query,
+                question_query,
                 multichoice_id,
                 package_id,
                 question,
@@ -123,12 +146,23 @@ async def insert_multichoice_questions(package_id, questions, answers, explanati
                 explanation,
                 False
             )
+
+            # Insert options into the options table
+            for option in options:
+                await db_util.post_data(
+                    options_query,
+                    multichoice_id,
+                    option
+                )
+
             if result:
                 inserted_ids.append(multichoice_id)
+
         return inserted_ids
     except Exception as e:
         logging.error(f"Error inserting multichoice questions: {e}")
         return {"status": "error", "message": str(e)}
+
 
 
 async def fetch_evaluation(evaluation_id):

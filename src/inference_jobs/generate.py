@@ -93,7 +93,7 @@ def get_prompt_by_type_and_language(question_type: str, language: str) -> Prompt
         return mcq_prompt_en if language == "en" else mcq_prompt_id
     elif question_type == "essay":
         return essay_prompt_en if language == "en" else essay_prompt_id
-    else:
+    else: 
         raise ValueError("Unsupported question type. Use 'mcq' or 'essay'.")
 
 # Function to generate questions
@@ -110,30 +110,56 @@ def generate_questions(context: str, question_type: str, language: str, qa_insta
 def parse_mcq(response):
     result = response['result']
     lines = result.split("\n")
-    soal_pg = []
-    jawaban_pg = []
-    current_question = []
+    soal_pg = []         # Store questions
+    options_pg = []      # Store options as lists
+    jawaban_pg = []      # Store correct answer text
+    current_question = None
+    current_options = []
+    correct_option_letter = None
 
     for line in lines:
+        line = line.strip()  # Clean leading/trailing whitespaces
+
+        # Identify a new question
         if line.startswith("1. Pertanyaan:") or line.startswith("1. Question:") or \
            line.startswith("2. Pertanyaan:") or line.startswith("2. Question:") or \
            line.startswith("3. Pertanyaan:") or line.startswith("3. Question:") or \
            line.startswith("4. Pertanyaan:") or line.startswith("4. Question:") or \
            line.startswith("5. Pertanyaan:") or line.startswith("5. Question:"):
-            if current_question:
-                soal_pg.append("\n".join(current_question))
-                current_question = []
-            current_question.append(line.split("Pertanyaan:")[1].strip(
-            ) if "Pertanyaan:" in line else line.split("Question:")[1].strip())
-        elif line.strip().startswith("A.") or line.strip().startswith("B.") or line.strip().startswith("C.") or line.strip().startswith("D."):
-            current_question.append(line.strip())
-        elif line.startswith("   Jawaban:") or line.startswith("   Answer:"):
-            jawaban_pg.append(line.split("Jawaban:")[1].strip(
-            ) if "Jawaban:" in line else line.split("Answer:")[1].strip())
-    if current_question:
-        soal_pg.append("\n".join(current_question))
 
-    return soal_pg, jawaban_pg
+            # Save the previous question and options
+            if current_question and current_options and correct_option_letter:
+                soal_pg.append(current_question)
+                options_pg.append(current_options)
+                # Map the correct answer letter to the corresponding option text
+                correct_index = ord(correct_option_letter) - ord('A')
+                jawaban_pg.append(current_options[correct_index])
+                current_options = []  # Reset options for the next question
+                correct_option_letter = None  # Reset correct answer letter
+
+            # Extract the question text
+            if "Pertanyaan:" in line:
+                current_question = line.split("Pertanyaan:")[1].strip()
+            elif "Question:" in line:
+                current_question = line.split("Question:")[1].strip()
+
+        # Identify options
+        elif line.startswith("A.") or line.startswith("B.") or line.startswith("C.") or line.startswith("D."):
+            current_options.append(line.strip())  # Add the entire option line (with "A.", "B.", etc.)
+
+        # Identify the answer
+        elif line.startswith("Jawaban:") or line.startswith("Answer:"):
+            correct_option_letter = line.split("Jawaban:")[1].strip() if "Jawaban:" in line else line.split("Answer:")[1].strip()
+
+    # Append the last question and options
+    if current_question and current_options and correct_option_letter:
+        soal_pg.append(current_question)
+        options_pg.append(current_options)
+        correct_index = ord(correct_option_letter) - ord('A')
+        jawaban_pg.append(current_options[correct_index])
+
+    return soal_pg, options_pg, jawaban_pg
+
 
 # Parsing Essay
 
@@ -142,6 +168,7 @@ def parse_essay(response):
     result = response['result']
     lines = result.split("\n")
     soal_essay = []
+    empty = []
     jawaban_essay = []
     for line in lines:
         if "Pertanyaan:" in line or "Question:" in line:
@@ -151,7 +178,7 @@ def parse_essay(response):
             jawaban_essay.append(line.split("Jawaban:")[1].strip(
             ) if "Jawaban:" in line else line.split("Answer:")[1].strip())
 
-    return soal_essay, jawaban_essay
+    return soal_essay, empty, jawaban_essay
 
 
 async def generate_quiz_question(package):
@@ -194,9 +221,9 @@ async def generate_quiz_question(package):
         if (language == "en"):
             response_mcq = generate_questions(prompt, "mcq", "en", qa)
 
-        questions, answers = parse_mcq(response_mcq)
+        questions, options, answers = parse_mcq(response_mcq)
 
-        return questions, answers
+        return questions, options, answers
 
     # Genrating essay quiz
     elif question_type == 1:
@@ -210,9 +237,9 @@ async def generate_quiz_question(package):
         if (language == "en"):
             response_essay = generate_questions(prompt, "essay", "en", qa)
 
-        questions, contexts = parse_essay(response_essay)
+        questions, options, contexts = parse_essay(response_essay)
 
-        return questions, contexts
+        return questions, options, contexts
 
     else:
         logging.info("Error occurs when generating quiz")

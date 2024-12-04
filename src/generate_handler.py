@@ -27,14 +27,31 @@ async def generate_request_handler(data):
             return {"status": "error", "message": "No valid PDF context found in package."}
 
         # Step 2: Generating quiz
-        questions, answers = await generate_quiz_question(package)
+        questions, options, answers = await generate_quiz_question(package)
 
         # Step 3: Update questions
-        if (package.get("type") == 0):
-            question_ids = await insert_multichoice_questions(package_id, questions, answers)
+        if package.get("type") == 0:  # Multi-choice questions
+            question_ids = await insert_multichoice_questions(package_id, questions, answers, options)
+            question_data = [
+                {
+                    "question_id": str(qid),
+                    "question": q,
+                    "options": opt,  
+                    "answer": ans
+                }
+                for qid, q, opt, ans in zip(question_ids, questions, options, answers)
+            ]
 
-        elif (package.get("type") == 1):
+        elif package.get("type") == 1:  # Essay questions
             question_ids = await insert_essay_questions(package_id, questions, answers)
+            question_data = [
+                {
+                    "question_id": str(qid),
+                    "question": q,
+                    "answer": ans
+                }
+                for qid, q, ans in zip(question_ids, questions, answers)
+            ]
 
         else:
             return {"status": "error", "message": "Invalid package type."}
@@ -44,10 +61,7 @@ async def generate_request_handler(data):
         if os.path.exists(pdf_context_path):
             os.remove(pdf_context_path)
 
-        question_data = [
-            {"question_id": str(qid), "question": q, "answer": ans}
-            for qid, q, ans in zip(question_ids, questions, answers)
-        ]
+ 
 
         return {"package_id": package_id, "question_data": question_data}
 
