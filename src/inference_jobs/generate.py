@@ -4,6 +4,7 @@ from pathlib import Path
 import asyncio
 import pdfplumber
 import logging
+import torch
 from dotenv import load_dotenv
 
 from langchain.chains import RetrievalQA
@@ -26,6 +27,10 @@ load_dotenv()
 # Configure Groq
 parser_key = os.getenv("PARSER_KEY")
 llm_api = os.getenv("LLM_KEY")
+
+# Check if CUDA is available
+if not torch.cuda.is_available():
+    raise RuntimeError("CUDA is not available. Please check your GPU setup.")
 
 # Parsing PDF to text
 
@@ -66,7 +71,8 @@ def setup_model_and_retriever(parsed_text, embeddings_model_name="BAAI/bge-base-
         # docs = chromautils.filter_complex_metadata(docs)
 
         # Use the FastEmbed model for embeddings
-        embeddings = FastEmbedEmbeddings(model_name=embeddings_model_name)
+        embeddings = FastEmbedEmbeddings(
+            model_name=embeddings_model_name, device="cuda")
         # db = Chroma.from_documents(docs, embeddings, persist_directory="./db")
 
         qdrant = Qdrant.from_documents(
@@ -93,7 +99,7 @@ def get_prompt_by_type_and_language(question_type: str, language: str) -> Prompt
         return mcq_prompt_en if language == "en" else mcq_prompt_id
     elif question_type == "essay":
         return essay_prompt_en if language == "en" else essay_prompt_id
-    else: 
+    else:
         raise ValueError("Unsupported question type. Use 'mcq' or 'essay'.")
 
 # Function to generate questions
@@ -132,11 +138,14 @@ def parse_mcq(response):
 
             # Save the previous question and options
             if current_question and current_options and correct_option_letter:
-                soal_pg.append(current_question.encode('utf-8', 'replace').decode('utf-8'))
-                options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
+                soal_pg.append(current_question.encode(
+                    'utf-8', 'replace').decode('utf-8'))
+                options_pg.append(
+                    [opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
                 # Map the correct answer letter to the corresponding option text
                 correct_index = ord(correct_option_letter) - ord('A')
-                jawaban_pg.append(current_options[correct_index].encode('utf-8', 'replace').decode('utf-8'))
+                jawaban_pg.append(current_options[correct_index].encode(
+                    'utf-8', 'replace').decode('utf-8'))
                 current_options = []  # Reset options for the next question
                 correct_option_letter = None  # Reset correct answer letter
 
@@ -148,18 +157,23 @@ def parse_mcq(response):
 
         # Identify options
         elif line.startswith("A.") or line.startswith("B.") or line.startswith("C.") or line.startswith("D."):
-            current_options.append(line.strip())  # Add the entire option line (with "A.", "B.", etc.)
+            # Add the entire option line (with "A.", "B.", etc.)
+            current_options.append(line.strip())
 
         # Identify the answer
         elif line.startswith("Jawaban:") or line.startswith("Answer:"):
-            correct_option_letter = line.split("Jawaban:")[1].strip() if "Jawaban:" in line else line.split("Answer:")[1].strip()
+            correct_option_letter = line.split("Jawaban:")[1].strip(
+            ) if "Jawaban:" in line else line.split("Answer:")[1].strip()
 
     # Append the last question and options
     if current_question and current_options and correct_option_letter:
-        soal_pg.append(current_question.encode('utf-8', 'replace').decode('utf-8'))
-        options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
+        soal_pg.append(current_question.encode(
+            'utf-8', 'replace').decode('utf-8'))
+        options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8')
+                          for opt in current_options])
         correct_index = ord(correct_option_letter) - ord('A')
-        jawaban_pg.append(current_options[correct_index].encode('utf-8', 'replace').decode('utf-8'))
+        jawaban_pg.append(current_options[correct_index].encode(
+            'utf-8', 'replace').decode('utf-8'))
 
     return soal_pg, options_pg, jawaban_pg
 
@@ -171,7 +185,8 @@ def parse_essay(response):
     result = response['result']
     lines = result.split("\n")
     soal_essay = []      # List to store essay questions
-    empty = []           # Placeholder for empty answers (as per function signature)
+    # Placeholder for empty answers (as per function signature)
+    empty = []
     jawaban_essay = []   # List to store essay answers
 
     for line in lines:
@@ -193,8 +208,10 @@ def parse_essay(response):
                 jawaban_essay.append(line.split("Answer:")[1].strip())
 
     # Ensure all outputs are properly encoded in UTF-8
-    soal_essay = [q.encode('utf-8', 'replace').decode('utf-8') for q in soal_essay]
-    jawaban_essay = [a.encode('utf-8', 'replace').decode('utf-8') for a in jawaban_essay]
+    soal_essay = [q.encode('utf-8', 'replace').decode('utf-8')
+                  for q in soal_essay]
+    jawaban_essay = [a.encode('utf-8', 'replace').decode('utf-8')
+                     for a in jawaban_essay]
 
     return soal_essay, empty, jawaban_essay
 
@@ -222,13 +239,13 @@ async def generate_quiz_question(package):
 
     # Context Retrival
     llm = ChatGroq(temperature=0, model_name="llama3-70b-8192",
-                   groq_api_key=llm_api)
+                   groq_api_key=llm_api, device="cuda")
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=compression_retriever)
 
     # Genrating multiple choice quiz
     if question_type == 0:
-        prompt = "Generate 5 Multiple Choice Question from Context" + \
+        prompt = "Generate 5 Multiple Choice Question fropim Context" + \
             str(prompt)
 
         # Quiz for indonesia
