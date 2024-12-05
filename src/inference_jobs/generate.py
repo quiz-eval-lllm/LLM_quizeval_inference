@@ -120,6 +120,9 @@ def parse_mcq(response):
     for line in lines:
         line = line.strip()  # Clean leading/trailing whitespaces
 
+        # Encode the line to UTF-8 and decode it back to ensure consistent encoding
+        line = line.encode('utf-8', 'replace').decode('utf-8')
+
         # Identify a new question
         if line.startswith("1. Pertanyaan:") or line.startswith("1. Question:") or \
            line.startswith("2. Pertanyaan:") or line.startswith("2. Question:") or \
@@ -129,11 +132,11 @@ def parse_mcq(response):
 
             # Save the previous question and options
             if current_question and current_options and correct_option_letter:
-                soal_pg.append(current_question)
-                options_pg.append(current_options)
+                soal_pg.append(current_question.encode('utf-8', 'replace').decode('utf-8'))
+                options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
                 # Map the correct answer letter to the corresponding option text
                 correct_index = ord(correct_option_letter) - ord('A')
-                jawaban_pg.append(current_options[correct_index])
+                jawaban_pg.append(current_options[correct_index].encode('utf-8', 'replace').decode('utf-8'))
                 current_options = []  # Reset options for the next question
                 correct_option_letter = None  # Reset correct answer letter
 
@@ -153,10 +156,10 @@ def parse_mcq(response):
 
     # Append the last question and options
     if current_question and current_options and correct_option_letter:
-        soal_pg.append(current_question)
-        options_pg.append(current_options)
+        soal_pg.append(current_question.encode('utf-8', 'replace').decode('utf-8'))
+        options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
         correct_index = ord(correct_option_letter) - ord('A')
-        jawaban_pg.append(current_options[correct_index])
+        jawaban_pg.append(current_options[correct_index].encode('utf-8', 'replace').decode('utf-8'))
 
     return soal_pg, options_pg, jawaban_pg
 
@@ -167,16 +170,31 @@ def parse_mcq(response):
 def parse_essay(response):
     result = response['result']
     lines = result.split("\n")
-    soal_essay = []
-    empty = []
-    jawaban_essay = []
+    soal_essay = []      # List to store essay questions
+    empty = []           # Placeholder for empty answers (as per function signature)
+    jawaban_essay = []   # List to store essay answers
+
     for line in lines:
+        # Encode the line to UTF-8 and decode it back to ensure consistent encoding
+        line = line.encode('utf-8', 'replace').decode('utf-8')
+
+        # Identify essay questions
         if "Pertanyaan:" in line or "Question:" in line:
-            soal_essay.append(line.split("Pertanyaan:")[1].strip(
-            ) if "Pertanyaan:" in line else line.split("Question:")[1].strip())
+            if "Pertanyaan:" in line:
+                soal_essay.append(line.split("Pertanyaan:")[1].strip())
+            elif "Question:" in line:
+                soal_essay.append(line.split("Question:")[1].strip())
+
+        # Identify essay answers
         elif "Jawaban:" in line or "Answer:" in line:
-            jawaban_essay.append(line.split("Jawaban:")[1].strip(
-            ) if "Jawaban:" in line else line.split("Answer:")[1].strip())
+            if "Jawaban:" in line:
+                jawaban_essay.append(line.split("Jawaban:")[1].strip())
+            elif "Answer:" in line:
+                jawaban_essay.append(line.split("Answer:")[1].strip())
+
+    # Ensure all outputs are properly encoded in UTF-8
+    soal_essay = [q.encode('utf-8', 'replace').decode('utf-8') for q in soal_essay]
+    jawaban_essay = [a.encode('utf-8', 'replace').decode('utf-8') for a in jawaban_essay]
 
     return soal_essay, empty, jawaban_essay
 
