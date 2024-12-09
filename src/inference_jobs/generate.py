@@ -29,8 +29,11 @@ parser_key = os.getenv("PARSER_KEY")
 llm_api = os.getenv("LLM_KEY")
 
 # Check if CUDA is available
-if not torch.cuda.is_available():
-    raise RuntimeError("CUDA is not available. Please check your GPU setup.")
+if torch.cuda.is_available():
+    logging.info("CUDA is available. Activating GPU for embeddings.")
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+else:
+    logging.info("CUDA is not available. Falling back to CPU.")
 
 # Parsing PDF to text
 
@@ -72,7 +75,7 @@ def setup_model_and_retriever(parsed_text, embeddings_model_name="BAAI/bge-base-
 
         # Use the FastEmbed model for embeddings
         embeddings = FastEmbedEmbeddings(
-            model_name=embeddings_model_name, device="cuda")
+            model_name=embeddings_model_name)
         # db = Chroma.from_documents(docs, embeddings, persist_directory="./db")
 
         qdrant = Qdrant.from_documents(
@@ -239,13 +242,13 @@ async def generate_quiz_question(package):
 
     # Context Retrival
     llm = ChatGroq(temperature=0, model_name="llama3-70b-8192",
-                   groq_api_key=llm_api, device="cuda")
+                   groq_api_key=llm_api)
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=compression_retriever)
 
     # Genrating multiple choice quiz
     if question_type == 0:
-        prompt = "Generate 5 Multiple Choice Question fropim Context" + \
+        prompt = "Generate 5 Multiple Choice Question from Context" + \
             str(prompt)
 
         # Quiz for indonesia

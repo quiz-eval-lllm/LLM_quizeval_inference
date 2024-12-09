@@ -1,6 +1,7 @@
 import pynvml
 import logging
 
+
 def pick_gpus_by_memory_usage(count=2):
     """
     Select GPUs with the least memory usage.
@@ -15,7 +16,7 @@ def pick_gpus_by_memory_usage(count=2):
         # Initialize NVML
         pynvml.nvmlInit()
         device_count = pynvml.nvmlDeviceGetCount()
-        
+
         if device_count == 0:
             logging.warning("No GPUs detected on the system.")
             return []
@@ -32,16 +33,8 @@ def pick_gpus_by_memory_usage(count=2):
 
         # Sort GPUs by memory usage (ascending)
         memory_info.sort(key=lambda x: x[1])
-        
-        # Log detailed memory usage
-        for gpu in memory_info:
-            logging.info(
-                f"GPU {gpu[0]}: {gpu[2] / (1024**3):.2f} GB total, "
-                f"{gpu[3] / (1024**3):.2f} GB used ({gpu[1] * 100:.2f}% used)"
-            )
-        
+
         selected_gpus = [str(gpu[0]) for gpu in memory_info[:count]]
-        logging.info(f"Selected GPUs: {selected_gpus}")
         return selected_gpus
 
     except pynvml.NVMLError as e:
@@ -57,9 +50,11 @@ def pick_gpus_by_memory_usage(count=2):
         except pynvml.NVMLError as e:
             logging.warning(f"Error shutting down NVML: {str(e)}")
 
+
 if __name__ == "__main__":
     # Set up logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s - %(levelname)s - %(message)s")
 
     # Number of GPUs to select
     num_gpus = 2  # Change this value to select a different number of GPUs
