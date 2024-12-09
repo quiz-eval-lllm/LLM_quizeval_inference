@@ -6,13 +6,29 @@ from aio_pika import connect_robust, Message, ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
 from dotenv import load_dotenv
 from utils.inference_utils import InferenceProcessManager
+import torch
+
 
 # Load environment variables
 load_dotenv()
 
+# Check if CUDA is available
+if torch.cuda.is_available():
+    logging.info("CUDA is available. Activating GPU for embeddings.")
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+else:
+    logging.info("CUDA is not available. Falling back to CPU.")
+
 # Configure logging
 log_format = "%(asctime)s [%(levelname)s]: (%(name)s) %(message)s"
-logging.basicConfig(level=logging.INFO, format=log_format)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s]: (%(name)s) %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
 
 # RabbitMQ configuration from .env
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
