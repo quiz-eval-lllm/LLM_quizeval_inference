@@ -163,7 +163,7 @@ async def main():
 
     # Start consuming and pass the channel to the task function
 
-    queue.consume(lambda message: task(message, channel))
+    await queue.consume(lambda message: task(message, channel))
     # log_gpu_usage()  # Add the GPU monitoring task
 
     logging.info("Waiting for messages...")
