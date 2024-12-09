@@ -12,13 +12,6 @@ import torch
 # Load environment variables
 load_dotenv()
 
-# Check if CUDA is available
-if torch.cuda.is_available():
-    logging.info("CUDA is available. Activating GPU for embeddings.")
-    torch.set_default_tensor_type(torch.cuda.FloatTensor)
-else:
-    logging.info("CUDA is not available. Falling back to CPU.")
-
 # Configure logging
 log_format = "%(asctime)s [%(levelname)s]: (%(name)s) %(message)s"
 logging.basicConfig(
@@ -28,6 +21,17 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+logging.getLogger('torch').setLevel(logging.INFO)
+
+
+# Check if CUDA is available
+if torch.cuda.is_available():
+    logging.info("CUDA is available. Activating GPU for embeddings.")
+    torch.set_default_device("cuda")  # Use recommended method
+else:
+    logging.info("CUDA is not available. Falling back to CPU.")
+    torch.set_default_device("cpu")  # Use recommended method
 
 
 # RabbitMQ configuration from .env
