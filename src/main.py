@@ -162,10 +162,10 @@ async def main():
     await queue.bind(exchange, routing_key="rpc")
 
     # Start consuming and pass the channel to the task function
-    await asyncio.gather(
-        queue.consume(lambda message: task(message, channel)),
-        # log_gpu_usage()  # Add the GPU monitoring task
-    )
+
+    queue.consume(lambda message: task(message, channel))
+    # log_gpu_usage()  # Add the GPU monitoring task
+
     logging.info("Waiting for messages...")
 
     try:
