@@ -68,7 +68,7 @@ async def log_gpu_usage():
             logging.error(f"Error while logging GPU usage: {e}")
 
         # Wait for a few seconds before the next log
-        await asyncio.sleep(10)
+        await asyncio.sleep(30)
 
 
 async def task(message: AbstractIncomingMessage, channel):
