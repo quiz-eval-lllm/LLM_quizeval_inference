@@ -4,7 +4,6 @@ from pathlib import Path
 import asyncio
 import pdfplumber
 import logging
-import torch
 from dotenv import load_dotenv
 
 from langchain.chains import RetrievalQA
@@ -27,13 +26,6 @@ load_dotenv()
 # Configure Groq
 parser_key = os.getenv("PARSER_KEY")
 llm_api = os.getenv("LLM_KEY")
-
-# Check if CUDA is available
-if torch.cuda.is_available():
-    logging.info("CUDA is available. Activating GPU for embeddings.")
-    torch.set_default_tensor_type(torch.cuda.FloatTensor)
-else:
-    logging.info("CUDA is not available. Falling back to CPU.")
 
 # Parsing PDF to text
 
