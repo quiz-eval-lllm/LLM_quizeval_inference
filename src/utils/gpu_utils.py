@@ -2,7 +2,7 @@ import pynvml
 import logging
 
 
-def pick_gpus_by_memory_usage(count=2):
+def pick_gpus_by_memory_usage(count=1):
     """
     Select GPUs with the least memory usage.
 

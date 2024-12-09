@@ -7,6 +7,7 @@ from aio_pika.abc import AbstractIncomingMessage
 from dotenv import load_dotenv
 from utils.inference_utils import InferenceProcessManager
 import torch
+import subprocess
 
 
 # Load environment variables
@@ -44,6 +45,30 @@ RABBITMQ_DIRECT_MESSAGE = os.getenv("RABBITMQ_DIRECT_EXCHANGE")
 
 # Initialize the inference process manager
 inference_manager = InferenceProcessManager()
+
+
+async def log_gpu_usage():
+    """Log GPU usage periodically."""
+    while True:
+        try:
+            # Run nvidia-smi and capture its output
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                    "--format=csv,noheader,nounits"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            if result.returncode == 0:
+                gpu_stats = result.stdout.strip()
+                logging.info(f"GPU Usage: {gpu_stats}")
+            else:
+                logging.warning("Failed to get GPU stats: " + result.stderr)
+        except Exception as e:
+            logging.error(f"Error while logging GPU usage: {e}")
+
+        # Wait for a few seconds before the next log
+        await asyncio.sleep(10)
 
 
 async def task(message: AbstractIncomingMessage, channel):
@@ -129,7 +154,10 @@ async def main():
     await queue.bind(exchange, routing_key="rpc")
 
     # Start consuming and pass the channel to the task function
-    await queue.consume(lambda message: task(message, channel))
+    await asyncio.gather(
+        queue.consume(lambda message: task(message, channel)),
+        log_gpu_usage()  # Add the GPU monitoring task
+    )
     logging.info("Waiting for messages...")
 
     try:
