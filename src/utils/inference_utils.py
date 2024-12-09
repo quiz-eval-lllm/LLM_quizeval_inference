@@ -55,6 +55,7 @@ class InferenceProcessManager:
             logging.info(f"Assigned GPUs: {available_gpus}")
         else:
             logging.warning("No available GPUs. Proceeding with CPU.")
+            available_gpus = []
 
         # Call the inference functionality
         result = await self._call_generate(data)

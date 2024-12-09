@@ -47,23 +47,28 @@ RABBITMQ_DIRECT_MESSAGE = os.getenv("RABBITMQ_DIRECT_EXCHANGE")
 inference_manager = InferenceProcessManager()
 
 
-async def log_gpu_usage():
-    """Log GPU usage periodically."""
+async def log_gpu_usage(selected_gpus):
+    """Log usage statistics for the chosen GPUs periodically."""
     while True:
         try:
-            # Run nvidia-smi and capture its output
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
-                    "--format=csv,noheader,nounits"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            if result.returncode == 0:
-                gpu_stats = result.stdout.strip()
-                logging.info(f"GPU Usage: {gpu_stats}")
-            else:
-                logging.warning("Failed to get GPU stats: " + result.stderr)
+            # Use NVML for more precise GPU monitoring
+            import pynvml
+            pynvml.nvmlInit()
+
+            # Log details for each selected GPU
+            for gpu_id in selected_gpus:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(int(gpu_id))
+                memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+
+                logging.info(
+                    f"GPU {gpu_id}: "
+                    f"Memory Used: {memory.used /
+                                    1e6:.2f} MB / {memory.total / 1e6:.2f} MB, "
+                    f"Utilization: {utilization.gpu}%"
+                )
+            pynvml.nvmlShutdown()
+
         except Exception as e:
             logging.error(f"Error while logging GPU usage: {e}")
 
@@ -80,6 +85,9 @@ async def task(message: AbstractIncomingMessage, channel):
 
         # Process the request
         response_data = await inference_manager.start(data)
+
+        # Launch GPU monitoring for the selected GPUs
+        # asyncio.create_task(log_gpu_usage(selected_gpus))
 
         # Check for errors in the inference result
         if response_data.get("status") == "error":
@@ -156,7 +164,7 @@ async def main():
     # Start consuming and pass the channel to the task function
     await asyncio.gather(
         queue.consume(lambda message: task(message, channel)),
-        log_gpu_usage()  # Add the GPU monitoring task
+        # log_gpu_usage()  # Add the GPU monitoring task
     )
     logging.info("Waiting for messages...")
 
