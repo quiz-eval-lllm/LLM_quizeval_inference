@@ -67,7 +67,7 @@ def setup_model_and_retriever(parsed_text, embeddings_model_name="BAAI/bge-base-
 
         # Use the FastEmbed model for embeddings
         embeddings = FastEmbedEmbeddings(
-            model_name=embeddings_model_name, device="cuda")
+            model_name=embeddings_model_name)
         # db = Chroma.from_documents(docs, embeddings, persist_directory="./db")
 
         qdrant = Qdrant.from_documents(

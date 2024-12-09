@@ -28,11 +28,11 @@ logging.getLogger('torch').setLevel(logging.INFO)
 
 # Check if CUDA is available
 if torch.cuda.is_available():
-    logging.info("CUDA is available. Activating GPU for embeddings.")
-    torch.set_default_device("cuda")  # Use recommended method
+    logging.info("CUDA is available. Activating GPU.")
+    torch.set_default_device("cuda")
 else:
     logging.info("CUDA is not available. Falling back to CPU.")
-    torch.set_default_device("cpu")  # Use recommended method
+    torch.set_default_device("cpu")
 
 
 # RabbitMQ configuration from .env
