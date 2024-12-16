@@ -14,7 +14,6 @@ import subprocess
 load_dotenv()
 
 # Configure logging
-log_format = "%(asctime)s [%(levelname)s]: (%(name)s) %(message)s"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s]: (%(name)s) %(message)s",
@@ -47,54 +46,19 @@ RABBITMQ_DIRECT_MESSAGE = os.getenv("RABBITMQ_DIRECT_EXCHANGE")
 inference_manager = InferenceProcessManager()
 
 
-async def log_gpu_usage(selected_gpus):
-    """Log usage statistics for the chosen GPUs periodically."""
-    while True:
-        try:
-            # Use NVML for more precise GPU monitoring
-            import pynvml
-            pynvml.nvmlInit()
-
-            # Log details for each selected GPU
-            for gpu_id in selected_gpus:
-                handle = pynvml.nvmlDeviceGetHandleByIndex(int(gpu_id))
-                memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-
-                logging.info(
-                    f"GPU {gpu_id}: "
-                    f"Memory Used: {memory.used /
-                                    1e6:.2f} MB / {memory.total / 1e6:.2f} MB, "
-                    f"Utilization: {utilization.gpu}%"
-                )
-            pynvml.nvmlShutdown()
-
-        except Exception as e:
-            logging.error(f"Error while logging GPU usage: {e}")
-
-        # Wait for a few seconds before the next log
-        await asyncio.sleep(30)
-
-
 async def task(message: AbstractIncomingMessage, channel):
     """Task to handle incoming RabbitMQ messages."""
     try:
         # Decode and log the received message
         data = json.loads(message.body.decode())
-        logging.info(f"Received message: {data}")
 
         # Process the request
         response_data = await inference_manager.start(data)
-
-        # Launch GPU monitoring for the selected GPUs
-        # asyncio.create_task(log_gpu_usage(selected_gpus))
 
         # Check for errors in the inference result
         if response_data.get("status") == "error":
             logging.error(f"Inference failed: {response_data['message']}")
             raise RuntimeError("Inference process failed")
-
-        logging.info(f"Processed successfully: {response_data}")
 
         # Send response to the reply-to queue
         if message.reply_to:
@@ -102,9 +66,9 @@ async def task(message: AbstractIncomingMessage, channel):
                 Message(
                     body=json.dumps(response_data).encode(),
                     content_type="application/json",
-                    correlation_id=message.correlation_id,  # Ensure correlation_id is sent back
+                    correlation_id=message.correlation_id,
                 ),
-                routing_key=message.reply_to,  # Use the reply_to queue provided by the client
+                routing_key=message.reply_to,
             )
             logging.info("Response sent successfully.")
 
@@ -128,9 +92,9 @@ async def task(message: AbstractIncomingMessage, channel):
                 Message(
                     body=json.dumps(error_response).encode(),
                     content_type="application/json",
-                    correlation_id=message.correlation_id,  # Ensure correlation_id is sent back
+                    correlation_id=message.correlation_id,
                 ),
-                routing_key=message.reply_to,  # Use the reply_to queue provided by the client
+                routing_key=message.reply_to,
             )
             logging.info("Error response sent successfully.")
 
@@ -162,9 +126,7 @@ async def main():
     await queue.bind(exchange, routing_key="rpc")
 
     # Start consuming and pass the channel to the task function
-
     await queue.consume(lambda message: task(message, channel))
-    # log_gpu_usage()  # Add the GPU monitoring task
 
     logging.info("Waiting for messages...")
 

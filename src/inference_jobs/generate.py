@@ -19,6 +19,8 @@ from langchain_groq import ChatGroq
 from llama_parse import LlamaParse
 from langchain.vectorstores import utils as chromautils
 from inference_jobs.generate_prompt_template import mcq_prompt_en, mcq_prompt_id, essay_prompt_en, essay_prompt_id
+import shutil
+
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +28,30 @@ load_dotenv()
 # Configure Groq
 parser_key = os.getenv("PARSER_KEY")
 llm_api = os.getenv("LLM_KEY")
+
+# Global Model Initialization
+EMBEDDINGS_MODEL = None
+
+# Initialize global embeddings and retriever at application start.
+
+
+def initialize_global_resources(embeddings_model_name="BAAI/bge-base-en-v1.5"):
+    global EMBEDDINGS_MODEL, RETRIEVER
+
+    if EMBEDDINGS_MODEL is None:
+        EMBEDDINGS_MODEL = FastEmbedEmbeddings(
+            model_name=embeddings_model_name)
+
+
+# Delete previous RAG
+
+
+def reset_vectorstore_directory(directory_path):
+    if os.path.exists(directory_path):
+        shutil.rmtree(directory_path)
+        logging.info("[2] Deleting Vectorstore")
+    os.makedirs(directory_path, exist_ok=True)
+
 
 # Parsing PDF to text
 
@@ -36,6 +62,7 @@ def parse_pdf_to_text(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
                 text += page.extract_text()
+        logging.info("[1] Parsing PDF")
         return text
     except Exception as e:
         logging.info(f"Error parsing PDF: {e}")
@@ -44,11 +71,14 @@ def parse_pdf_to_text(pdf_path):
 # Setup for model and retriever
 
 
-def setup_model_and_retriever(parsed_text, embeddings_model_name="BAAI/bge-base-en-v1.5"):
-    """
-    Set up the document, splitter, retriever, and compressor for the QA chain.
-    """
+def setup_model_and_retriever(parsed_text):
+
     try:
+        vectorstore_directory = "./db"
+
+        # Reset vectorstore directory
+        reset_vectorstore_directory(vectorstore_directory)
+
         # Save the processed text to a markdown file
         document_path = Path("data/parsed_document.md")
         document_path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,25 +93,24 @@ def setup_model_and_retriever(parsed_text, embeddings_model_name="BAAI/bge-base-
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1024, chunk_overlap=128)
         docs = text_splitter.split_documents(loaded_documents)
-        # docs = chromautils.filter_complex_metadata(docs)
 
-        # Use the FastEmbed model for embeddings
-        embeddings = FastEmbedEmbeddings(
-            model_name=embeddings_model_name)
-        # db = Chroma.from_documents(docs, embeddings, persist_directory="./db")
+        # Use the globally initialized embeddings
+        logging.info("[3] Initialize Embeddings")
 
         qdrant = Qdrant.from_documents(
             docs,
-            embeddings,
+            EMBEDDINGS_MODEL,
             # location=":memory:",
             path="./db",
             collection_name="document_embeddings",
         )
 
         # Set up the retriever with compression
+        logging.info("[4] Managing Retriever")
         retriever = qdrant.as_retriever(search_kwargs={"k": 5})
         compressor = FlashrankRerank(model="ms-marco-MiniLM-L-12-v2")
         return ContextualCompressionRetriever(base_compressor=compressor, base_retriever=retriever)
+
     except Exception as e:
         logging.info(f"Error setting up model and retriever: {e}")
         return None
@@ -109,17 +138,19 @@ def generate_questions(context: str, question_type: str, language: str, qa_insta
 
 
 def parse_mcq(response):
+    logging.info("[6] Response parsing")
+
     result = response['result']
     lines = result.split("\n")
-    soal_pg = []         # Store questions
-    options_pg = []      # Store options as lists
-    jawaban_pg = []      # Store correct answer text
+    soal_pg = []
+    options_pg = []
+    jawaban_pg = []
     current_question = None
     current_options = []
     correct_option_letter = None
 
     for line in lines:
-        line = line.strip()  # Clean leading/trailing whitespaces
+        line = line.strip()
 
         # Encode the line to UTF-8 and decode it back to ensure consistent encoding
         line = line.encode('utf-8', 'replace').decode('utf-8')
@@ -141,8 +172,8 @@ def parse_mcq(response):
                 correct_index = ord(correct_option_letter) - ord('A')
                 jawaban_pg.append(current_options[correct_index].encode(
                     'utf-8', 'replace').decode('utf-8'))
-                current_options = []  # Reset options for the next question
-                correct_option_letter = None  # Reset correct answer letter
+                current_options = []
+                correct_option_letter = None
 
             # Extract the question text
             if "Pertanyaan:" in line:
@@ -152,7 +183,6 @@ def parse_mcq(response):
 
         # Identify options
         elif line.startswith("A.") or line.startswith("B.") or line.startswith("C.") or line.startswith("D."):
-            # Add the entire option line (with "A.", "B.", etc.)
             current_options.append(line.strip())
 
         # Identify the answer
@@ -177,12 +207,13 @@ def parse_mcq(response):
 
 
 def parse_essay(response):
+    logging.info("[6] Response parsing")
+
     result = response['result']
     lines = result.split("\n")
-    soal_essay = []      # List to store essay questions
-    # Placeholder for empty answers (as per function signature)
+    soal_essay = []
     empty = []
-    jawaban_essay = []   # List to store essay answers
+    jawaban_essay = []
 
     for line in lines:
         # Encode the line to UTF-8 and decode it back to ensure consistent encoding
@@ -212,9 +243,7 @@ def parse_essay(response):
 
 
 async def generate_quiz_question(package):
-    """
-    Generate quiz questions based on a package containing context (PDF or text).
-    """
+
     pdf_path = package.get("pdf_path")
     question_type = package.get("type")
     language = package.get("lang")
@@ -233,12 +262,13 @@ async def generate_quiz_question(package):
         return
 
     # Context Retrival
-    llm = ChatGroq(temperature=0, model_name="llama3-70b-8192",
+    llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768",
                    groq_api_key=llm_api)
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=compression_retriever)
 
     # Genrating multiple choice quiz
+    logging.info("[5] LLM Response Generating")
     if question_type == 0:
         prompt = "Generate 5 Multiple Choice Question from Context" + \
             str(prompt)

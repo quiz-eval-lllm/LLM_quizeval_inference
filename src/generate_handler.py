@@ -2,7 +2,10 @@ import asyncio
 import logging
 import os
 from db_handler import fetch_package, insert_essay_questions, insert_multichoice_questions
-from inference_jobs.generate import generate_quiz_question
+from inference_jobs.generate import generate_quiz_question, initialize_global_resources
+
+# Initialize global models during startup
+initialize_global_resources()
 
 
 async def generate_request_handler(data):
@@ -36,7 +39,7 @@ async def generate_request_handler(data):
                 {
                     "question_id": str(qid),
                     "question": q,
-                    "options": opt,  
+                    "options": opt,
                     "answer": ans
                 }
                 for qid, q, opt, ans in zip(question_ids, questions, options, answers)
@@ -60,8 +63,6 @@ async def generate_request_handler(data):
         pdf_context_path = package.get("pdf_path")
         if os.path.exists(pdf_context_path):
             os.remove(pdf_context_path)
-
- 
 
         return {"package_id": package_id, "question_data": question_data}
 

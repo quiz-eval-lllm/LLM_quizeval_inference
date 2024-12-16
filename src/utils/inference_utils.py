@@ -6,13 +6,18 @@ import os
 from utils.gpu_utils import pick_gpus_by_memory_usage
 from generate_handler import generate_request_handler
 from evaluate_handler import evaluate_request_handler
+from langchain.vectorstores import Qdrant
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import FlashrankRerank
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+
 
 # TODO: Terminate whole inference process if theres no new message
 # TODO: GPU allocation
 
 
 class InferenceProcessManager:
-    def __init__(self, gpu_count=2):
+    def __init__(self):
         self.last_used = None
         self.lock = threading.Lock()
         self.shutdown_timer = None
@@ -46,7 +51,7 @@ class InferenceProcessManager:
         with self.lock:
             if not self.process_active:
                 logging.info("Starting inference process...")
-                self.process_active = True  # Mark process as active
+                self.process_active = True
 
         # Select GPUs with the least memory usage
         available_gpus = pick_gpus_by_memory_usage(count=2)
@@ -87,8 +92,6 @@ class InferenceProcessManager:
             else:
                 logging.info(f"Invoking quiz generating inference type")
                 result = await generate_request_handler(data)
-
-            logging.info(f"Inference result: {result}")
 
             return result
         except Exception as e:
