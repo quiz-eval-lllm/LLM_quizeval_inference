@@ -5,6 +5,7 @@ import asyncio
 import pdfplumber
 import logging
 from dotenv import load_dotenv
+import re
 
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -156,52 +157,45 @@ def parse_mcq(response):
         line = line.encode('utf-8', 'replace').decode('utf-8')
 
         # Identify a new question
-        if line.startswith("1. Pertanyaan:") or line.startswith("1. Question:") or \
-           line.startswith("2. Pertanyaan:") or line.startswith("2. Question:") or \
-           line.startswith("3. Pertanyaan:") or line.startswith("3. Question:") or \
-           line.startswith("4. Pertanyaan:") or line.startswith("4. Question:") or \
-           line.startswith("5. Pertanyaan:") or line.startswith("5. Question:"):
-
+        if re.match(r"^\d+\. (Pertanyaan|Question):", line):
             # Save the previous question and options
             if current_question and current_options and correct_option_letter:
-                soal_pg.append(current_question.encode(
-                    'utf-8', 'replace').decode('utf-8'))
-                options_pg.append(
-                    [opt.encode('utf-8', 'replace').decode('utf-8') for opt in current_options])
-                # Map the correct answer letter to the corresponding option text
+                soal_pg.append(current_question)
+                options_pg.append(current_options)
                 correct_index = ord(correct_option_letter) - ord('A')
-                jawaban_pg.append(current_options[correct_index].encode(
-                    'utf-8', 'replace').decode('utf-8'))
+                jawaban_pg.append(current_options[correct_index])
                 current_options = []
                 correct_option_letter = None
 
             # Extract the question text
-            if "Pertanyaan:" in line:
-                current_question = line.split("Pertanyaan:")[1].strip()
-            elif "Question:" in line:
-                current_question = line.split("Question:")[1].strip()
+            current_question = re.split(
+                r"Pertanyaan:|Question:", line, maxsplit=1)[1].strip()
 
         # Identify options
-        elif line.startswith("A.") or line.startswith("B.") or line.startswith("C.") or line.startswith("D."):
-            current_options.append(line.strip())
+        elif re.match(r"^[A-D]\.", line):  # Match options like "A.", "B.", "C.", "D."
+            # Remove the "A.", "B.", etc., and store only the option text
+            option_text = re.split(r"^[A-D]\.\s*", line, maxsplit=1)[1].strip()
+            current_options.append(option_text)
 
         # Identify the answer
-        elif line.startswith("Jawaban:") or line.startswith("Answer:"):
-            correct_option_letter = line.split("Jawaban:")[1].strip(
-            ) if "Jawaban:" in line else line.split("Answer:")[1].strip()
+        elif "Jawaban:" in line or "Answer:" in line:
+            match = re.search(
+                r"Jawaban:\s*([A-D])", line) if "Jawaban:" in line else re.search(r"Answer:\s*([A-D])", line)
+            if match:
+                correct_option_letter = match.group(1)
+            else:
+                logging.error(
+                    f"Failed to parse correct option from line: {line}")
+                correct_option_letter = None
 
     # Append the last question and options
     if current_question and current_options and correct_option_letter:
-        soal_pg.append(current_question.encode(
-            'utf-8', 'replace').decode('utf-8'))
-        options_pg.append([opt.encode('utf-8', 'replace').decode('utf-8')
-                          for opt in current_options])
+        soal_pg.append(current_question)
+        options_pg.append(current_options)
         correct_index = ord(correct_option_letter) - ord('A')
-        jawaban_pg.append(current_options[correct_index].encode(
-            'utf-8', 'replace').decode('utf-8'))
+        jawaban_pg.append(current_options[correct_index])
 
     return soal_pg, options_pg, jawaban_pg
-
 
 # Parsing Essay
 
