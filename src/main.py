@@ -111,6 +111,7 @@ async def main():
         port=RABBITMQ_PORT,
         login=RABBITMQ_USER,
         password=RABBITMQ_PASSWORD,
+        heartbeat=300
     )
 
     channel = await connection.channel()
